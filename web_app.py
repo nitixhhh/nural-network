@@ -63,56 +63,89 @@ def handle_transparency_and_convert(image):
     return image
 
 
-def preprocess_image_from_pil(image):
+def get_binarized_array(image):
     """
-    Same robust preprocessing logic as predict.py (inversion, cropping, centering)
+    User image ko load karke difference-based dynamic binarization return karega.
     """
     img_array = np.array(image.convert('L'))
-    
-    # Step 1: Robust Background Detection
     bg_color = np.median(img_array)
-    
-    # Step 2: Difference Image Creation
     diff_array = np.abs(img_array.astype(np.int32) - bg_color)
     max_diff = diff_array.max()
     
-    # Step 3: Dynamic Thresholding (Binarization)
     if max_diff < 15:
-        bin_array = np.zeros_like(img_array, dtype=np.uint8)
-    else:
-        thresh = max(15, int(0.20 * max_diff))
-        bin_array = np.where(diff_array > thresh, 255, 0).astype(np.uint8)
-        
-    processed_image = Image.fromarray(bin_array)
+        return np.zeros_like(img_array, dtype=np.uint8)
     
-    # Step 4: Auto-Cropping & Centering (MNIST/EMNIST standard matching)
-    bbox = processed_image.getbbox()
-    if bbox is not None:
-        cropped = processed_image.crop(bbox)
-        cw, ch = cropped.size
-        
-        # Aspect-ratio standard sizing to max 20x20
-        max_dim = max(cw, ch)
-        scale = 20.0 / max_dim
-        new_w = max(1, int(cw * scale))
-        new_h = max(1, int(ch * scale))
-        
-        cropped_resized = cropped.resize((new_w, new_h), Image.Resampling.LANCZOS)
-        
-        # Paste in center of 28x28
-        centered_image = Image.new('L', (28, 28), color=0)
-        paste_x = (28 - new_w) // 2
-        paste_y = (28 - new_h) // 2
-        centered_image.paste(cropped_resized, (paste_x, paste_y))
-        processed_image = centered_image
-    else:
-        processed_image = processed_image.resize((28, 28), Image.Resampling.LANCZOS)
-        
-    # Save preprocessed image for visual debugging (loaded by UI)
-    debug_path = os.path.join("static", "debug_preprocessed.png")
-    processed_image.save(debug_path)
+    thresh = max(15, int(0.20 * max_diff))
+    return np.where(diff_array > thresh, 255, 0).astype(np.uint8)
+
+
+def center_and_scale(cropped_pil):
+    """
+    Crop kiye character ko [20x20] me scale aur [28x28] grid me center karega.
+    """
+    cw, ch = cropped_pil.size
+    max_dim = max(cw, ch)
+    scale = 20.0 / max_dim
+    new_w = max(1, int(cw * scale))
+    new_h = max(1, int(ch * scale))
     
-    return processed_image
+    cropped_resized = cropped_pil.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    
+    centered_image = Image.new('L', (28, 28), color=0)
+    paste_x = (28 - new_w) // 2
+    paste_y = (28 - new_h) // 2
+    centered_image.paste(cropped_resized, (paste_x, paste_y))
+    return centered_image
+
+
+def segment_characters(bin_array):
+    """
+    Pure Python/NumPy vertical projection profiling to segment multiple characters
+    written horizontally. Returns a list of 28x28 preprocessed PIL images.
+    """
+    h, w = bin_array.shape
+    col_sums = np.sum(bin_array, axis=0)
+    active_cols = col_sums > 0
+    
+    segments = []
+    in_segment = False
+    start_idx = 0
+    
+    for i, active in enumerate(active_cols):
+        if active and not in_segment:
+            start_idx = i
+            in_segment = True
+        elif not active and in_segment:
+            # Ignore tiny noise columns (e.g. less than 2 pixels wide)
+            if i - start_idx >= 2:
+                segments.append((start_idx, i))
+            in_segment = False
+            
+    if in_segment:
+        if w - start_idx >= 2:
+            segments.append((start_idx, w))
+            
+    # Agar koi character segment nahi mila, toh fallback to full image
+    if len(segments) == 0:
+        pil_img = Image.fromarray(bin_array)
+        bbox = pil_img.getbbox()
+        if bbox is not None:
+            return [center_and_scale(pil_img.crop(bbox))]
+        return [center_and_scale(pil_img)]
+        
+    cropped_chars = []
+    for start, end in segments:
+        char_slice = bin_array[:, start:end]
+        row_sums = np.sum(char_slice, axis=1)
+        active_rows = np.where(row_sums > 0)[0]
+        if len(active_rows) == 0:
+            continue
+        top, bottom = active_rows[0], active_rows[-1] + 1
+        
+        char_crop = char_slice[top:bottom, :]
+        cropped_chars.append(center_and_scale(Image.fromarray(char_crop)))
+        
+    return cropped_chars
 
 
 def get_character_details(char):
@@ -183,35 +216,61 @@ def predict_endpoint():
         print(f"[INFO] Weights file: {MODEL_PATH}")
         print("[Web API] Received image for prediction...")
         
-        # Preprocess
-        preprocessed_img = preprocess_image_from_pil(img)
-        print("[Preprocessing] Preprocessed debug image saved to 'static/debug_preprocessed.png'")
+        # Preprocess & Segment
+        bin_array = get_binarized_array(img)
+        cropped_chars = segment_characters(bin_array)
+        print(f"[Segmentation] Detected {len(cropped_chars)} individual characters.")
         
-        # Run inference
-        img_tensor = transform(preprocessed_img).unsqueeze(0).to(device)
+        predicted_chars_list = []
+        confidences_list = []
         
-        with torch.no_grad():
-            outputs = model(img_tensor)
-            probabilities = F.softmax(outputs, dim=1)
-            confidence, predicted_class_idx = torch.max(probabilities, dim=1)
+        # Run inference for each segmented character
+        for idx, char_img in enumerate(cropped_chars):
+            img_tensor = transform(char_img).unsqueeze(0).to(device)
+            with torch.no_grad():
+                outputs = model(img_tensor)
+                probabilities = F.softmax(outputs, dim=1)
+                confidence, predicted_class_idx = torch.max(probabilities, dim=1)
+                
+            predicted_idx = predicted_class_idx.item()
+            predicted_chars_list.append(CLASS_MAPPING[predicted_idx])
+            confidences_list.append(confidence.item() * 100)
             
-        predicted_idx = predicted_class_idx.item()
-        confidence_percentage = confidence.item() * 100
-        predicted_char = CLASS_MAPPING[predicted_idx]
+        # Combine characters
+        predicted_string = "".join(predicted_chars_list)
+        average_confidence = sum(confidences_list) / len(confidences_list)
         
-        char_type, ascii_val = get_character_details(predicted_char)
+        # Save tiled debug image (all cropped characters side-by-side)
+        tiled_image = Image.new('L', (28 * len(cropped_chars), 28), color=0)
+        for idx, char_img in enumerate(cropped_chars):
+            tiled_image.paste(char_img, (28 * idx, 0))
+            
+        debug_path = os.path.join("static", "debug_preprocessed.png")
+        tiled_image.save(debug_path)
+        print("[Preprocessing] Tiled preprocessed debug image saved to 'static/debug_preprocessed.png'")
         
+        # Details metadata parsing
+        if len(predicted_string) == 1:
+            char_type, ascii_val = get_character_details(predicted_string)
+        else:
+            char_types_set = set()
+            for c in predicted_string:
+                t, _ = get_character_details(c)
+                char_types_set.add(t.split(" (")[0].split(" ")[0])
+            char_type = "Multi-Character Text (" + " + ".join(sorted(char_types_set)) + ")"
+            ascii_val = ", ".join(str(ord(c)) for c in predicted_string)
+            
         # Print output to terminal console (exact box format user loves)
         print("\n" + "="*30)
-        print(f"PREDICTED CHARACTER : {predicted_char}")
+        print(f"PREDICTED STRING    : {predicted_string}")
+        print(f"AVG CONFIDENCE      : {average_confidence:.2f}%")
         print(f"TYPE                : {char_type}")
-        print(f"ASCII VALUE         : {ascii_val}")
-        print(f"CONFIDENCE          : {confidence_percentage:.2f}%")
+        print(f"ASCII VALUES        : {ascii_val}")
         print("="*30 + "\n")
         
         return jsonify({
-            'character': predicted_char,
-            'confidence': round(confidence_percentage, 2),
+            'character': predicted_string,
+            'confidence': round(average_confidence, 2),
             'char_type': char_type,
             'ascii': ascii_val,
             'debug_image': '/static/debug_preprocessed.png'

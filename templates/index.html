@@ -778,9 +778,13 @@
                 document.getElementById('char-details').style.display = 'flex';
                 document.getElementById('detail-type').innerText = data.char_type;
                 
-                // Hex format matching U+XXXX
-                const hexVal = data.ascii.toString(16).toUpperCase().padStart(4, '0');
-                document.getElementById('detail-ascii').innerText = `${data.ascii} (U+${hexVal})`;
+                // Hex format matching U+XXXX for single characters, raw value for strings
+                if (typeof data.ascii === 'number') {
+                    const hexVal = data.ascii.toString(16).toUpperCase().padStart(4, '0');
+                    document.getElementById('detail-ascii').innerText = `${data.ascii} (U+${hexVal})`;
+                } else {
+                    document.getElementById('detail-ascii').innerText = data.ascii;
+                }
                 
                 // Add timestamp to avoid browser cache for debug image
                 document.getElementById('debug-img').src = data.debug_image + '?t=' + new Date().getTime();
