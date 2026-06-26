@@ -142,13 +142,14 @@
             justify-content: center;
             flex-direction: column;
             min-height: 280px;
+            width: 100%;
         }
 
         .tab-content.active {
             display: flex;
         }
 
-        /* Canvas Styles */
+        /* Canvas Styles (Responsive for mobile screens) */
         .canvas-container {
             position: relative;
             background: #000;
@@ -156,18 +157,19 @@
             overflow: hidden;
             border: 2px solid var(--card-border);
             box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
-            width: 280px;
-            height: 280px;
+            width: 100%;
+            max-width: 280px;
+            aspect-ratio: 1 / 1;
         }
 
         canvas {
             display: block;
-            width: 280px;
-            height: 280px;
+            width: 100%;
+            height: 100%;
             cursor: crosshair;
         }
 
-        /* Upload Styles */
+        /* Upload Styles (Responsive for mobile screens) */
         .upload-container {
             display: flex;
             flex-direction: column;
@@ -175,8 +177,9 @@
             justify-content: center;
             border: 2px dashed rgba(255, 255, 255, 0.15);
             border-radius: 16px;
-            width: 280px;
-            height: 280px;
+            width: 100%;
+            max-width: 280px;
+            aspect-ratio: 1 / 1;
             padding: 20px;
             text-align: center;
             cursor: pointer;
@@ -340,6 +343,33 @@
             box-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
         }
 
+        /* [NEW] Detailed Character Metadata Styles */
+        .char-details {
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        .detail-label {
+            color: var(--text-muted);
+        }
+
+        .detail-val {
+            font-weight: 600;
+            color: var(--accent-cyan);
+            font-family: 'Fira Code', monospace;
+        }
+
         .debug-section {
             border-top: 1px solid rgba(255, 255, 255, 0.05);
             padding-top: 16px;
@@ -395,6 +425,32 @@
             width: 18px;
             height: 18px;
             fill: currentColor;
+        }
+
+        /* Mobile specific design overrides */
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            header h1 {
+                font-size: 1.8rem;
+                margin-bottom: 4px;
+            }
+            header p {
+                font-size: 0.85rem;
+            }
+            .card {
+                padding: 16px;
+                gap: 16px;
+                border-radius: 18px;
+            }
+            .predicted-char {
+                font-size: 6rem;
+                min-height: 90px;
+            }
+            .canvas-container, .upload-container {
+                max-width: 250px;
+            }
         }
     </style>
 </head>
@@ -493,6 +549,18 @@
                 </div>
             </div>
 
+            <!-- [NEW] Character details output section -->
+            <div class="char-details" id="char-details" style="display: none;">
+                <div class="detail-item">
+                    <span class="detail-label">Character Category:</span>
+                    <span class="detail-val" id="detail-type">-</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">ASCII Value:</span>
+                    <span class="detail-val" id="detail-ascii">-</span>
+                </div>
+            </div>
+
             <!-- Debug Preprocessed Box -->
             <div class="debug-section">
                 <div class="debug-thumbnail">
@@ -525,11 +593,6 @@
             }
             
             document.getElementById(`${tab}-tab`).classList.add('active');
-            
-            // Auto predict when switching tab if upload preview has an image
-            if (tab === 'upload' && document.getElementById('preview-img').style.display === 'block') {
-                // Auto run predict
-            }
         }
 
         // Canvas Drawing Setup
@@ -664,6 +727,11 @@
             document.getElementById('result-progress').style.width = '0%';
             document.getElementById('debug-img').src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'><rect width='28' height='28' fill='black'/></svg>";
             document.getElementById('debug-text').innerText = '28x28 normalized input';
+            
+            // Reset character metadata
+            document.getElementById('char-details').style.display = 'none';
+            document.getElementById('detail-type').innerText = '-';
+            document.getElementById('detail-ascii').innerText = '-';
         }
 
         // Predict Button Action
@@ -705,6 +773,14 @@
                 document.getElementById('result-char').innerText = data.character;
                 document.getElementById('result-confidence').innerText = data.confidence.toFixed(2) + '%';
                 document.getElementById('result-progress').style.width = data.confidence + '%';
+                
+                // Update character metadata
+                document.getElementById('char-details').style.display = 'flex';
+                document.getElementById('detail-type').innerText = data.char_type;
+                
+                // Hex format matching U+XXXX
+                const hexVal = data.ascii.toString(16).toUpperCase().padStart(4, '0');
+                document.getElementById('detail-ascii').innerText = `${data.ascii} (U+${hexVal})`;
                 
                 // Add timestamp to avoid browser cache for debug image
                 document.getElementById('debug-img').src = data.debug_image + '?t=' + new Date().getTime();

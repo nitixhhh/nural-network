@@ -115,6 +115,46 @@ def preprocess_image_from_pil(image):
     return processed_image
 
 
+def get_character_details(char):
+    """
+    Returns (Type, ASCII) for a given character.
+    """
+    if char in digits:
+        return "Digit (Number)", ord(char)
+    elif char in uppercase:
+        return "Uppercase Alphabet Letter", ord(char)
+    elif char in lowercase:
+        return "Lowercase Alphabet Letter", ord(char)
+    elif char in specials:
+        special_names = {
+            '@': 'At Sign (E-mail)',
+            '#': 'Hash / Octothorpe',
+            '%': 'Percent Sign',
+            '&': 'Ampersand (And)',
+            '+': 'Plus Sign (Addition)',
+            '-': 'Minus Sign / Hyphen',
+            '*': 'Asterisk (Multiplication)',
+            '/': 'Forward Slash (Division)',
+            '=': 'Equal Sign',
+            '?': 'Question Mark',
+            '!': 'Exclamation Mark',
+            '(': 'Open Parenthesis',
+            ')': 'Close Parenthesis',
+            '[': 'Open Bracket',
+            ']': 'Close Bracket',
+            '{': 'Open Brace',
+            '}': 'Close Brace',
+            '<': 'Less Than Sign',
+            '>': 'Greater Than Sign',
+            ';': 'Semicolon',
+            ':': 'Colon',
+            '.': 'Period / Dot',
+            ',': 'Comma'
+        }
+        return f"Special Symbol ({special_names.get(char, 'Character')})", ord(char)
+    return "Unknown Character", ord(char)
+
+
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -159,15 +199,21 @@ def predict_endpoint():
         confidence_percentage = confidence.item() * 100
         predicted_char = CLASS_MAPPING[predicted_idx]
         
+        char_type, ascii_val = get_character_details(predicted_char)
+        
         # Print output to terminal console (exact box format user loves)
         print("\n" + "="*30)
         print(f"PREDICTED CHARACTER : {predicted_char}")
+        print(f"TYPE                : {char_type}")
+        print(f"ASCII VALUE         : {ascii_val}")
         print(f"CONFIDENCE          : {confidence_percentage:.2f}%")
         print("="*30 + "\n")
         
         return jsonify({
             'character': predicted_char,
             'confidence': round(confidence_percentage, 2),
+            'char_type': char_type,
+            'ascii': ascii_val,
             'debug_image': '/static/debug_preprocessed.png'
         })
         
