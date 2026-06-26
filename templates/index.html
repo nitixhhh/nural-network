@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI General OCR Engine</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #080710;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --accent-cyan: #00f2fe;
+            --accent-purple: #4facfe;
+            --text-color: #f5f5f7;
+            --text-muted: #8e8e93;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(79, 172, 254, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(0, 242, 254, 0.1) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        header {
+            margin-top: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-weight: 800;
+            font-size: 2.2rem;
+            letter-spacing: -0.05rem;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            font-weight: 400;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+            width: 100%;
+            max-width: 900px;
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                grid-template-columns: 1.2fr 1fr;
+            }
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 24px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(0, 242, 254, 0.25);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 12px;
+        }
+
+        .tabs-header {
+            display: flex;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            padding: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .tab-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 10px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .tab-btn.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .tab-content {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            min-height: 280px;
+        }
+
+        .tab-content.active {
+            display: flex;
+        }
+
+        /* Canvas Styles */
+        .canvas-container {
+            position: relative;
+            background: #000;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 2px solid var(--card-border);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+            width: 280px;
+            height: 280px;
+        }
+
+        canvas {
+            display: block;
+            width: 280px;
+            height: 280px;
+            cursor: crosshair;
+        }
+
+        /* Upload Styles */
+        .upload-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            width: 280px;
+            height: 280px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(0, 0, 0, 0.15);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-container:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 242, 254, 0.03);
+        }
+
+        .upload-icon {
+            font-size: 2.5rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            transition: color 0.3s ease;
+        }
+
+        .upload-container:hover .upload-icon {
+            color: var(--accent-cyan);
+        }
+
+        .upload-text {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .upload-text span {
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .image-preview {
+            display: none;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 12px;
+        }
+
+        /* Action Buttons */
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: none;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-color);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+            color: #000;
+            font-weight: 700;
+            box-shadow: 0 4px 15px rgba(0, 242, 254, 0.35);
+        }
+
+        .btn-primary:hover {
+            opacity: 0.95;
+            box-shadow: 0 6px 20px rgba(0, 242, 254, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        /* Results Card Styles */
+        .results-panel {
+            justify-content: space-between;
+        }
+
+        .prediction-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 0;
+            gap: 8px;
+        }
+
+        .predicted-char {
+            font-size: 7.5rem;
+            font-weight: 800;
+            line-height: 1;
+            background: linear-gradient(135deg, #00f2fe, #4facfe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 35px rgba(0, 242, 254, 0.3);
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .predicted-label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .confidence-container {
+            width: 100%;
+        }
+
+        .confidence-label-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+            color: var(--text-muted);
+        }
+
+        .confidence-value {
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        .progress-bar-bg {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan));
+            border-radius: 4px;
+            transition: width 0.6s cubic-bezier(0.1, 0.8, 0.2, 1);
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+        }
+
+        .debug-section {
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .debug-thumbnail {
+            width: 64px;
+            height: 64px;
+            background: #000;
+            border-radius: 10px;
+            border: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        .debug-thumbnail img {
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+        }
+
+        .debug-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .debug-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .debug-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* Hidden Input */
+        #file-input {
+            display: none;
+        }
+
+        /* SVG Icon styling */
+        .icon {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Robust AI General OCR</h1>
+        <p>Real-time Character &amp; Digit Recognition on phone browser</p>
+    </header>
+
+    <div class="container">
+        <!-- Input Card -->
+        <div class="card">
+            <div class="card-title">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                </svg>
+                Input Board
+            </div>
+
+            <div class="tabs-header">
+                <button class="tab-btn active" onclick="switchTab('draw')">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M14.06 9.02L14.98 9.94L5.92 19H5V18.08L14.06 9.02M18.06 3C17.81 3 17.56 3.1 17.37 3.29L15.54 5.12L19.24 8.82L21.07 6.99C21.46 6.6 21.46 5.97 21.07 5.58L18.77 3.28C18.58 3.09 18.33 3 18.06 3M14.06 6.19L3 17.25V21H6.75L17.81 9.94L14.06 6.19Z"/>
+                    </svg>
+                    Draw
+                </button>
+                <button class="tab-btn" onclick="switchTab('upload')">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
+                    </svg>
+                    Gallery / Camera
+                </button>
+            </div>
+
+            <!-- Drawing Tab -->
+            <div id="draw-tab" class="tab-content active">
+                <div class="canvas-container">
+                    <canvas id="paint-canvas" width="280" height="280"></canvas>
+                </div>
+            </div>
+
+            <!-- Upload Tab -->
+            <div id="upload-tab" class="tab-content">
+                <div class="upload-container" onclick="triggerFileInput()">
+                    <div id="upload-prompt">
+                        <div class="upload-icon">
+                            <svg style="width:48px;height:48px" viewBox="0 0 24 24">
+                                <path fill="currentColor" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+                            </svg>
+                        </div>
+                        <p class="upload-text">Click to <span>Upload Image</span> or <span>Take Photo</span></p>
+                    </div>
+                    <img id="preview-img" class="image-preview" alt="Preview">
+                </div>
+                <input type="file" id="file-input" accept="image/*">
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-secondary" id="clear-btn">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                    Clear
+                </button>
+                <button class="btn btn-primary" id="predict-btn">
+                    <svg class="icon" style="fill:#000" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                    </svg>
+                    Predict
+                </button>
+            </div>
+        </div>
+
+        <!-- Result Card -->
+        <div class="card results-panel">
+            <div class="card-title">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/>
+                </svg>
+                AI Prediction Result
+            </div>
+
+            <div class="prediction-wrapper">
+                <div class="predicted-char" id="result-char">?</div>
+                <div class="predicted-label">PREDICTED CHARACTER</div>
+            </div>
+
+            <div class="confidence-container">
+                <div class="confidence-label-row">
+                    <span>Confidence Score</span>
+                    <span class="confidence-value" id="result-confidence">0.00%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" id="result-progress"></div>
+                </div>
+            </div>
+
+            <!-- Debug Preprocessed Box -->
+            <div class="debug-section">
+                <div class="debug-thumbnail">
+                    <img id="debug-img" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'><rect width='28' height='28' fill='black'/></svg>" alt="Debug Preprocessed">
+                </div>
+                <div class="debug-info">
+                    <div class="debug-title">AI Preprocessed View</div>
+                    <div class="debug-desc" id="debug-text">28x28 normalized input</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching logic
+        let currentTab = 'draw';
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            const event = window.event;
+            if (event && event.currentTarget) {
+                event.currentTarget.classList.add('active');
+            } else {
+                // Initial load default mapping
+                const buttons = document.querySelectorAll('.tab-btn');
+                if (tab === 'draw') buttons[0].classList.add('active');
+                else buttons[1].classList.add('active');
+            }
+            
+            document.getElementById(`${tab}-tab`).classList.add('active');
+            
+            // Auto predict when switching tab if upload preview has an image
+            if (tab === 'upload' && document.getElementById('preview-img').style.display === 'block') {
+                // Auto run predict
+            }
+        }
+
+        // Canvas Drawing Setup
+        const canvas = document.getElementById('paint-canvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+
+        // Clear canvas with black color (matching our background)
+        function clearCanvas() {
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.lineWidth = 18;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#ffffff';
+        }
+        
+        clearCanvas();
+
+        // Canvas Coordinates Helper
+        function getCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            // Scaling coordinates in case canvas size is modified by CSS layout
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            if (e.touches && e.touches.length > 0) {
+                return {
+                    x: (e.touches[0].clientX - rect.left) * scaleX,
+                    y: (e.touches[0].clientY - rect.top) * scaleY
+                };
+            } else {
+                return {
+                    x: (e.clientX - rect.left) * scaleX,
+                    y: (e.clientY - rect.top) * scaleY
+                };
+            }
+        }
+
+        // Mouse Events
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            const pos = getCoordinates(e);
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            const pos = getCoordinates(e);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isDrawing) {
+                isDrawing = false;
+                ctx.closePath();
+            }
+        });
+
+        // Touch Events for Android Phone (Termux client compatibility)
+        canvas.addEventListener('touchstart', (e) => {
+            // Prevent page scrolling when drawing
+            if (e.target === canvas) {
+                e.preventDefault();
+            }
+            isDrawing = true;
+            const pos = getCoordinates(e);
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.target === canvas) {
+                e.preventDefault();
+            }
+            if (!isDrawing) return;
+            const pos = getCoordinates(e);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            if (isDrawing) {
+                isDrawing = false;
+                ctx.closePath();
+            }
+        });
+
+        // Upload Preview Setup
+        const fileInput = document.getElementById('file-input');
+        const previewImg = document.getElementById('preview-img');
+        const uploadPrompt = document.getElementById('upload-prompt');
+
+        function triggerFileInput() {
+            fileInput.click();
+        }
+
+        fileInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    previewImg.style.display = 'block';
+                    uploadPrompt.style.display = 'none';
+                    
+                    // Auto predict uploaded image
+                    predictImage(e.target.result);
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Clear Trigger
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            if (currentTab === 'draw') {
+                clearCanvas();
+            } else {
+                fileInput.value = '';
+                previewImg.style.display = 'none';
+                previewImg.src = '';
+                uploadPrompt.style.display = 'block';
+            }
+            resetResults();
+        });
+
+        function resetResults() {
+            document.getElementById('result-char').innerText = '?';
+            document.getElementById('result-confidence').innerText = '0.00%';
+            document.getElementById('result-progress').style.width = '0%';
+            document.getElementById('debug-img').src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'><rect width='28' height='28' fill='black'/></svg>";
+            document.getElementById('debug-text').innerText = '28x28 normalized input';
+        }
+
+        // Predict Button Action
+        document.getElementById('predict-btn').addEventListener('click', () => {
+            if (currentTab === 'draw') {
+                // Get canvas base64
+                const dataURL = canvas.toDataURL('image/png');
+                predictImage(dataURL);
+            } else {
+                if (previewImg.src && previewImg.style.display === 'block') {
+                    predictImage(previewImg.src);
+                } else {
+                    alert("Pehle koi image select karein ya draw karein!");
+                }
+            }
+        });
+
+        // AJAX request to backend
+        function predictImage(base64Data) {
+            // UI Feedback during prediction
+            document.getElementById('result-char').innerText = '...';
+            
+            fetch('/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ image: base64Data })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert("Error: " + data.error);
+                    resetResults();
+                    return;
+                }
+                
+                // Update Prediction view
+                document.getElementById('result-char').innerText = data.character;
+                document.getElementById('result-confidence').innerText = data.confidence.toFixed(2) + '%';
+                document.getElementById('result-progress').style.width = data.confidence + '%';
+                
+                // Add timestamp to avoid browser cache for debug image
+                document.getElementById('debug-img').src = data.debug_image + '?t=' + new Date().getTime();
+                document.getElementById('debug-text').innerText = 'AI View (Cropped & Centered)';
+            })
+            .catch(error => {
+                console.error('Error during prediction:', error);
+                alert("Server se communicate karne me error aayi!");
+                resetResults();
+            });
+        }
+    </script>
+</body>
+</html>

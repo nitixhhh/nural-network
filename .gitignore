@@ -1,0 +1,22 @@
+# Virtual environment
+.venv/
+env/
+venv/
+ENV/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDEs
+.vscode/
+.idea/
+
+# Data and MNIST downloaded datasets
+data/
+
+# Temporary files
+*.png
+temp/
